@@ -1,6 +1,9 @@
 # Use the official httpd image from Docker Hub
 FROM httpd:latest
 
+RUN echo "Listen 8080" >> /usr/local/apache2/conf/httpd.conf
+
+
 RUN echo "ServerName localhost" >> /usr/local/apache2/conf/httpd.conf
 # Copy your custom index.html to the Apache web root directory
 COPY index.html /usr/local/apache2/htdocs/
