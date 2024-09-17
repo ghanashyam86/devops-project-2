@@ -1,0 +1,49 @@
+pipeline{
+    agent{
+        node{
+            label 'built-in'
+            customWorkspace '/mnt/project'
+        }
+    }
+    
+    environment{
+        NODE_IP = '172.31.17.143'
+        EC2_NAME = "ec2-user"
+        PIPELINE_NAME = "cd-pipeline"
+        PROJECT_NAME = "devops-project"
+    }
+    
+    stages{
+        stage('pull files'){
+            steps{
+                sshagent(['ec2-user']) {
+                  sh "ssh -o StrictHostKeyChecking=no ${EC2_NAME}@${NODE_IP}"
+                  sh "scp /mnt/project/devops-project/deployment.yaml ${EC2_NAME}@${NODE_IP}:/home/ec2-user/"
+                  sh "scp /mnt/project/devops-project/service.yaml ${EC2_NAME}@${NODE_IP}:/home/ec2-user/"
+				   sh "scp -r /mnt/test/devops-project-terraform-files ${EC2_NAME}@${NODE_IP}:/home/ec2-user/"  # copy terraform-files to ec2-user
+               }
+            }
+        }
+        
+      
+        
+        stage('approval'){
+            steps{
+                input message: 'Approve deployment?'
+            }
+        }
+        
+        stage('deployment'){
+            steps{
+                sshagent(['ec2-user']) {
+                    sh "ssh -o StrictHostKeyChecking=no ${EC2_NAME}@${NODE_IP}"
+                    sh "ssh -o StrictHostKeyChecking=no ${EC2_NAME}@${NODE_IP}  kubectl apply -f deployment.yaml"
+                    sh "ssh -o StrictHostKeyChecking=no ${EC2_NAME}@${NODE_IP}  kubectl apply -f service.yaml"
+                    sh "ssh -o StrictHostKeyChecking=no ${EC2_NAME}@${NODE_IP}  kubectl rollout restart deploy"
+                    sh "ssh -o StrictHostKeyChecking=no ${EC2_NAME}@${NODE_IP}  kubectl get service"
+               }
+            }
+        } 
+    }
+}
+

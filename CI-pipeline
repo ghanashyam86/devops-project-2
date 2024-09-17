@@ -1,0 +1,97 @@
+
+# This pipeline is used when maven as build tools and pom.xml file is there
+
+pipeline {
+    agent{
+        node{
+            label "built-in"
+            customWorkspace "/mnt/project"
+        }
+    }
+    environment {
+        DOCKER_USERNAME = "dockerghana1"     // check the 'ID' in your Jenkins credentials
+    }
+
+    stages {
+        stage("1. Cleanup") {
+            // Clean workspace directory for the current build
+            steps {
+                deleteDir ()             
+            }
+        }
+
+        stage ('2. Git Checkout') {
+            // use pipeline syntax generator to generate below step
+            // 'Pipeline syntax' --> Steps 'Smaple step' --> git (enter url & branch & generate)
+            steps {
+                dir ("/mnt/project"){
+                  script {
+                    sh "git clone https://github.com/ghanashyam86/hello-world-2.git" 
+                  }
+                }
+            }
+        }   
+        
+        stage("3. Maven build") {  
+            // Test the individual units of code 
+            steps{
+                dir ("/mnt/project/hello-world-2"){
+                  sh 'mvn install -DskipTests'        
+                }
+            }
+        }
+
+        
+
+        
+        stage('6. Docker Image Build') {
+            // Build Docker Image 
+            steps{
+                dir('/mnt/test/hello-world-2') {      // go to directory where 'Dockerfile' is stored
+                    script {
+                                
+                      sh "docker build -t ${JOB_NAME}:${BUILD_NUMBER} ."  // 'JOB_NAME' & 'BUILD_NUMBER' are Jenkins Global variable
+                    }
+                }
+            }
+        }
+        
+        stage('7. Docker Image Tag') {
+            // Rename the Docker Image before pushing to Dockerhub
+            steps{
+                dir('/mnt/test/hello-world-2') {      // go to directory where Docker Image is created
+                  script {
+                    
+                    sh "docker tag ${JOB_NAME}:${BUILD_NUMBER} ${DOCKER_USERNAME}/${JOB_NAME}:v${BUILD_NUMBER}"
+                    sh "docker tag ${JOB_NAME}:${BUILD_NUMBER} ${DOCKER_USERNAME}/${JOB_NAME}:latest"
+                  }
+                }
+            } 
+        }
+
+      
+
+        stage('9. Docker Image Push') {
+            // Login to Dockerhub & Push the image to Dockerhub
+            steps{
+                script { 
+                  withCredentials([usernamePassword(credentialsId: 'docker_cred', passwordVariable: 'docker_pass', usernameVariable: 'docker_user')]) {
+                     sh "echo '${docker_pass}' | docker login -u '${docker_user}' --password-stdin"
+                    
+                    sh "docker push ${DOCKER_USERNAME}/${JOB_NAME}:v${BUILD_NUMBER}"
+                    sh "docker push ${DOCKER_USERNAME}/${JOB_NAME}:latest"
+                  }
+                }
+            }
+        }
+        
+        stage('10. Docker Image Cleanup') {
+            // Remove the unwanted (dangling) images created in Jenkins Server to free-up space
+            steps{
+                script { 
+                  sh "docker image prune -af"
+                }
+            }
+        }
+    }
+}

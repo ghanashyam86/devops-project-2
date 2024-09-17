@@ -1,0 +1,65 @@
+pipeline{
+    agent{
+        node{
+            label 'built-in'
+            customWorkspace '/mnt/project'
+        }
+    }
+    
+    environment{
+        DOCKER_USERNAME='dockerghana1'
+       //DOCKER_CREDENTIALS_ID = 'docker_cred'
+    }
+    
+    stages{
+        stage('cleanup'){
+            steps{
+                deleteDir()
+            }
+        }
+        
+        stage('clone repository'){
+            steps{
+                dir('/mnt/project'){
+                    sh 'git clone https://github.com/ghanashyam86/project-repo.git'
+                }
+            }
+        }
+        
+        stage('build docker images'){
+            steps{
+                dir('/mnt/project/project-repo'){
+                    sh 'docker build -t ${JOB_NAME}:${BUILD_NUMBER} .'
+                }
+            }
+        }
+        
+        stage('docker image tag'){
+            steps{
+                dir('/mnt/project/project-repo'){
+                    sh 'docker tag ${JOB_NAME}:${BUILD_NUMBER} ${DOCKER_USERNAME}/${JOB_NAME}:v${BUILD_NUMBER}'
+                    sh 'docker tag ${JOB_NAME}:${BUILD_NUMBER} ${DOCKER_USERNAME}/${JOB_NAME}:latest'
+                }
+            }
+        }
+        
+        stage('docker images push'){
+            steps{
+                withCredentials([usernamePassword(credentialsId: 'dockerhub_cred', passwordVariable: 'docker_pass', usernameVariable: 'docker_user')]) {
+                   sh "echo '${docker_pass}' | docker login -u '${docker_user}' --password-stdin"
+                   
+                   sh 'docker push ${DOCKER_USERNAME}/${JOB_NAME}:v${BUILD_NUMBER}'
+                   sh 'docker push ${DOCKER_USERNAME}/${JOB_NAME}:latest'
+               }
+            }
+        }
+		
+		stage('10. Docker Image Cleanup') {
+            steps{
+                script { 
+                  sh "docker image prune -af"
+                }
+            }
+        }
+    }
+}
